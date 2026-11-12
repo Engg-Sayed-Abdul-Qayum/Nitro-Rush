@@ -57,7 +57,7 @@ pipeline {
                 test -f vite.config.js
                 test -f index.html
                 test -d src
-                test -f nginx.conf
+                test -f Nginx.conf
 
                 echo "All required React + Vite files found."
                 echo "Validation successful."
