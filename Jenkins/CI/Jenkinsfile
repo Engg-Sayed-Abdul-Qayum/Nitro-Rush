@@ -12,7 +12,7 @@ pipeline {
     }
 
     environment {
-        REPO_URL = 'https://github.com/Engg-Sayed-Abdul-Qayum/Project-Annual-Attendance-Record.git'
+        REPO_URL = 'https://github.com/Engg-Sayed-Abdul-Qayum/Nitro-Rush.git'
         BRANCH = 'main'
     }
 
