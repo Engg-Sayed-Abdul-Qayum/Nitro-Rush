@@ -1,0 +1,158 @@
+pipeline {
+    agent {
+        node {
+            label 'built-in'
+            customWorkspace '/var/lib/jenkins/workspace/CI-Pipeline-WorkFlow-Test'
+        }
+    }
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
+    environment {
+        REPO_URL = 'https://github.com/Engg-Sayed-Abdul-Qayum/Project-Annual-Attendance-Record.git'
+        BRANCH = 'main'
+    }
+
+    stages {
+
+        stage('Jenkins Shell Diagnostic') {
+            steps {
+                sh '''
+                    echo "Shell execution successful"
+                    echo "===== USER ====="
+                    whoami
+                    echo "===== WORKSPACE ====="
+                    pwd
+                    echo "===== DATE ====="
+                    date
+                '''
+            }
+        }
+
+        stage('Git Checkout') {
+            steps {
+                echo 'Preparing source code checkout...'
+            }
+        }
+
+        stage('AWS CLI Access-Info') {
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+            }
+            steps {
+                sh '''
+                    echo "Checking AWS CLI..."
+                    aws --version
+                    echo "Checking AWS identity..."
+                    aws sts get-caller-identity
+                '''
+            }
+        }
+
+        stage('Clone Repository') {
+            steps {
+                dir('app') {
+                    sh '''
+                        if [ -d ".git" ]; then
+                            echo "Repository already exists."
+                            echo "Skipping clone stage."
+                        else
+                            echo "Repository not found."
+                            echo "Cloning repository..."
+                            git clone --branch "$BRANCH" "$REPO_URL" .
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Basic Code Validation') {
+            steps {
+                dir('app') {
+                    sh '''
+                        echo "Checking required files..."
+
+                        test -f package.json
+                        test -f package-lock.json
+
+                        echo "Checking Next.js configuration..."
+
+                        if [ ! -f next.config.js ] && \
+                           [ ! -f next.config.mjs ] && \
+                           [ ! -f next.config.ts ]; then
+                            echo "Next.js configuration file not found"
+                            exit 1
+                        fi
+
+                        echo "Checking Node.js version..."
+                        node --version
+                        npm --version
+
+                        echo "Checking package configuration..."
+
+                        node -e "
+                            const p = require('./package.json');
+                            if (!p.scripts || !p.scripts.build) {
+                                throw new Error('Build script missing');
+                            }
+                            console.log('Package configuration valid');
+                        "
+                    '''
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                dir('app') {
+                    sh 'npm ci'
+                }
+            }
+        }
+
+        stage('Code Testing and Build') {
+            steps {
+                dir('app') {
+                    sh '''
+                        echo "Starting Next.js production build..."
+
+                        npm run build
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '''
+            ================================
+                   CI PIPELINE SUCCESS
+                   CODE VALIDATED
+            ================================
+            '''
+        }
+
+        failure {
+            echo '''
+            ================================
+                   CI PIPELINE FAILED
+                   CHECK BUILD LOGS
+            ================================
+            '''
+        }
+
+        always {
+            echo "CI Pipeline Result: ${currentBuild.currentResult}"
+        }
+    }
+}
+
+
+
+
+//  Testing 

@@ -1,0 +1,40 @@
+export const LEVELS = [
+  {
+    id: 1,
+    name: "City Sprint",
+    subtitle: "THE WARM-UP",
+    difficulty: "EASY",
+    color: "#c7ff35",
+    target: 900,
+    speed: 1,
+    traffic: 0.95,
+    reward: 500,
+    description: "Learn the lines. Own the streets.",
+  },
+  {
+    id: 2,
+    name: "Neon Highway",
+    subtitle: "NO ROOM TO BREATHE",
+    difficulty: "MEDIUM",
+    color: "#38d9ff",
+    target: 1250,
+    speed: 1.28,
+    traffic: 1.25,
+    reward: 1000,
+    description: "More traffic. Faster decisions.",
+  },
+  {
+    id: 3,
+    name: "Midnight Pro",
+    subtitle: "THE FINAL RUN",
+    difficulty: "HARD",
+    color: "#ff5577",
+    target: 1600,
+    speed: 1.58,
+    traffic: 1.65,
+    reward: 2000,
+    description: "One road. No second chances.",
+  },
+];
+
+export const clamp = (value, min, max) => Math.max(min, Math.min(max, value));

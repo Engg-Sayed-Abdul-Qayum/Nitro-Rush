@@ -1,0 +1,219 @@
+
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
+    environment {
+        // AWS configuration
+        AWS_REGION = 'us-east-1'
+        ECR_REPOSITORY = 'tca-project'
+
+        // Docker configuration
+        IMAGE_TAG = 'latest'
+        DOCKER_IMAGE = 'nitro-rush'
+
+        // GitHub configuration
+        REPO_URL = 'https://github.com/Engg-Sayed-Abdul-Qayum/Project-Annual-Attendance-Record.git'
+        BRANCH = 'main'
+    }
+
+    stages {
+
+        stage('Clone Repository') {
+            steps {
+                dir('app') {
+                    deleteDir()
+
+                    sh '''
+                        set -eu
+
+                        echo "Cloning application repository..."
+
+                        git clone \
+                            --branch "$BRANCH" \
+                            "$REPO_URL" .
+
+                        echo "Repository cloned successfully."
+                    '''
+                }
+            }
+        }
+
+        stage('Validate Dockerfile') {
+            steps {
+                dir('app') {
+                    sh '''
+                        set -eu
+
+                        echo "Validating project files..."
+
+                        test -f Dockerfile
+                        test -f package.json
+                        test -f package-lock.json
+
+                        if [ ! -f next.config.js ] &&
+                           [ ! -f next.config.mjs ] &&
+                           [ ! -f next.config.ts ] &&
+                           [ ! -f next.config.mts ]; then
+                            echo "Next.js configuration file not found."
+                            exit 1
+                        fi
+
+                        grep -q "FROM node:" Dockerfile
+                        grep -q "npm ci" Dockerfile
+                        grep -q "npm run build" Dockerfile
+                        grep -q "EXPOSE 4000" Dockerfile
+
+                        echo "Dockerfile validation successful."
+                    '''
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                dir('app') {
+                    sh '''
+                        set -eu
+
+                        echo "Building Docker image..."
+
+                        docker build \
+                            -t "$DOCKER_IMAGE:$IMAGE_TAG" .
+
+                        echo "Docker image build successful."
+
+                        docker images "$DOCKER_IMAGE"
+                    '''
+                }
+            }
+        }
+
+        stage('Publish to Amazon ECR') {
+
+            environment {
+                AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+                AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+            }
+
+            stages {
+
+                stage('AWS Authentication') {
+                    steps {
+                        script {
+                            env.AWS_ACCOUNT_ID = sh(
+                                script: '''
+                                    aws sts get-caller-identity \
+                                        --query Account \
+                                        --output text
+                                ''',
+                                returnStdout: true
+                            ).trim()
+
+                            echo "AWS authentication successful."
+                            echo "AWS Account: ${env.AWS_ACCOUNT_ID}"
+                            echo "AWS Region: ${env.AWS_REGION}"
+                        }
+
+                        sh '''
+                            set -eu
+
+                            echo "Checking ECR repository..."
+
+                            aws ecr describe-repositories \
+                                --repository-names "$ECR_REPOSITORY" \
+                                --region "$AWS_REGION" > /dev/null
+
+                            echo "ECR repository found."
+
+                            echo "Logging in to Amazon ECR..."
+
+                            aws ecr get-login-password \
+                                --region "$AWS_REGION" |
+                            docker login \
+                                --username AWS \
+                                --password-stdin \
+                                "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+
+                            echo "ECR login successful."
+                        '''
+                    }
+                }
+
+                stage('Tag Docker Image') {
+                    steps {
+                        sh '''
+                            set -eu
+
+                            ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+                            docker tag \
+                                "$DOCKER_IMAGE:$IMAGE_TAG" \
+                                "$ECR_URI/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                            echo "Docker image tagged successfully."
+                        '''
+                    }
+                }
+
+                stage('Push Image to Amazon ECR') {
+                    steps {
+                        sh '''
+                            set -eu
+
+                            ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+
+                            echo "Pushing Docker image to ECR..."
+
+                            docker push \
+                                "$ECR_URI/$ECR_REPOSITORY:$IMAGE_TAG"
+
+                            echo "Docker image push successful."
+                        '''
+                    }
+                }
+
+                stage('Verify ECR Image') {
+                    steps {
+                        sh '''
+                            set -eu
+
+                            aws ecr describe-images \
+                                --repository-name "$ECR_REPOSITORY" \
+                                --image-ids imageTag="$IMAGE_TAG" \
+                                --region "$AWS_REGION"
+
+                            echo "Image successfully verified in ECR."
+                        '''
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '================================'
+            echo '       CD PIPELINE SUCCESS'
+            echo '       IMAGE PUSH SUCCESS'
+            echo '================================'
+
+            echo "ECR Image: ${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/${env.ECR_REPOSITORY}:${env.IMAGE_TAG}"
+        }
+
+        failure {
+            echo '================================'
+            echo '       CD PIPELINE FAILED'
+            echo '       IMAGE PUSH FAILED'
+            echo '================================'
+        }
+
+        always {
+            echo "CD Pipeline Result: ${currentBuild.currentResult}"
+        }
+    }
+}
