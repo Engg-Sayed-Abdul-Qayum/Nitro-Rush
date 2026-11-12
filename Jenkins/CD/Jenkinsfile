@@ -47,29 +47,21 @@ pipeline {
             steps {
                 dir('app') {
                     sh '''
-                        set -eu
+                set -eu
 
-                        echo "Validating project files..."
+                echo "Validating Nitro Rush React + Vite project..."
 
-                        test -f Dockerfile
-                        test -f package.json
-                        test -f package-lock.json
+                test -f Dockerfile
+                test -f package.json
+                test -f package-lock.json
+                test -f vite.config.js
+                test -f index.html
+                test -d src
+                test -f nginx.conf
 
-                        if [ ! -f next.config.js ] &&
-                           [ ! -f next.config.mjs ] &&
-                           [ ! -f next.config.ts ] &&
-                           [ ! -f next.config.mts ]; then
-                            echo "Next.js configuration file not found."
-                            exit 1
-                        fi
-
-                        grep -q "FROM node:" Dockerfile
-                        grep -q "npm ci" Dockerfile
-                        grep -q "npm run build" Dockerfile
-                        grep -q "EXPOSE 4000" Dockerfile
-
-                        echo "Dockerfile validation successful."
-                    '''
+                echo "All required React + Vite files found."
+                echo "Validation successful."
+            '''
                 }
             }
         }
